@@ -38,9 +38,9 @@ class GCNReactionDirectionPredictor(nn.Module):
     def __init__(self, embedding_dim, hidden_feats, out_feats):
         super(GCNReactionDirectionPredictor, self).__init__()
         self.embedding = nn.Embedding(10000, embedding_dim)  # Embedding layer for metabolites (assuming 10,000 unique metabolites)
-        self.conv1 = GCNConv(embedding_dim, hidden_feats)
-        self.conv2 = GCNConv(hidden_feats, hidden_feats)
-        self.conv3 = GCNConv(hidden_feats, out_feats)
+        self.conv1 = GCNConv(embedding_dim, hidden_feats, add_self_loops=True, normalize=True)
+        self.conv2 = GCNConv(hidden_feats, hidden_feats, add_self_loops=True, normalize=True)
+        self.conv3 = GCNConv(hidden_feats, out_feats, add_self_loops=True, normalize=True)
         self.fc = nn.Linear(out_feats, 1)
         self.leaky_relu = nn.LeakyReLU(0.1)
 
@@ -99,7 +99,7 @@ def custom_collate(batch):
 
 # Training the model
 def train_gcn(model, data_loader, val_loader, epochs=40, lr=0.0001):
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=5e-4)  # Add weight decay for regularization
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)  # Add weight decay for regularization
     loss_fn = nn.BCEWithLogitsLoss()
     train_losses = []
     val_accuracies = []
@@ -109,7 +109,7 @@ def train_gcn(model, data_loader, val_loader, epochs=40, lr=0.0001):
         total_loss = 0
         for edge_index, features, batch, label in data_loader:
             prediction = model(edge_index, features, batch)
-            loss = loss_fn(prediction, label)
+            loss = loss_fn(prediction, label) + 1e-4 * sum(p.pow(2.0).sum() for p in model.parameters())
 
             optimizer.zero_grad()
             loss.backward()
@@ -152,7 +152,7 @@ val, loss = train_gcn(model, train_loader, val_loader)
 
 # Plot Training Loss
 import matplotlib.pyplot as plt
-plt.plot(loss)
+plt.plot(val)
 plt.xlabel('Epochs')
 plt.ylabel('Training Loss')
 plt.title('Training Loss vs. Epochs')
