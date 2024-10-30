@@ -98,7 +98,7 @@ def custom_collate(batch):
     return edge_index, features, batch, labels
 
 # Training the model
-def train_gcn(model, data_loader, val_loader, epochs=40, lr=0.0001):
+def train_gcn(model, data_loader, val_loader, epochs=80, lr=0.0001):
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)  # Add weight decay for regularization
     loss_fn = nn.BCEWithLogitsLoss()
     train_losses = []
