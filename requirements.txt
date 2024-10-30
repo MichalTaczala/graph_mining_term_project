@@ -2,3 +2,5 @@ numpy
 pandas
 scikit-learn
 hypernetx
+torch_geometric
+torch
