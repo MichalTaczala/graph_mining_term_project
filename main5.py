@@ -165,19 +165,19 @@ val_loader = DataLoader(val_dataset, batch_size=32, collate_fn=collate_fn)
 
 
 # Model configuration
-hidden_dim = 128  # Increased hidden layer size
+hidden_dim = 256  # Increased hidden layer size
 output_dim = 1
 
 # Initialize the model with metabolite embeddings
 model = ImprovedMLPWithEmbeddings(max_metabolite_id=max_metabolite_id, embedding_dim=embedding_dim, hidden_dim=hidden_dim, output_dim=output_dim)
 
 # Optimizer, loss, and scheduler
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-4)
 criterion = nn.BCELoss()
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
 
 # Training loop with scheduler
-epochs = 30
+epochs = 1
 best_accuracy = 0
 
 for epoch in range(epochs):
@@ -192,3 +192,45 @@ for epoch in range(epochs):
         torch.save(model.state_dict(), "best_model.pth")
 
 print(f"Best Validation Accuracy: {best_accuracy:.4f}")
+
+
+
+# Define ranges for hyperparameter tuning
+learning_rates = [0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009]
+weight_decays = [1e-4, 3e-4, 5e-4, 7e-4]
+
+# Variables to track the best configuration
+best_lr = None
+best_wd = None
+best_accuracy = 0
+
+# Loop through learning rates and weight decays
+for lr in learning_rates:
+    for wd in weight_decays:
+        print(f"\nTesting with Learning Rate = {lr}, Weight Decay = {wd}")
+
+        # Initialize the model with metabolite embeddings
+        model = ImprovedMLPWithEmbeddings(max_metabolite_id=max_metabolite_id, embedding_dim=embedding_dim, hidden_dim=hidden_dim, output_dim=output_dim)
+
+        # Optimizer, loss, and scheduler
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+        criterion = nn.BCELoss()
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
+
+        # Training loop
+        epochs = 30  # Adjust based on time/resource constraints
+        for epoch in range(epochs):
+            train_loss = train(model, train_loader, optimizer, criterion)
+            val_accuracy = evaluate(model, val_loader)
+            scheduler.step(val_accuracy)
+            print(f"Epoch {epoch+1}: Loss = {train_loss:.4f}, Validation Accuracy = {val_accuracy:.4f}")
+
+            # Save the best model configuration
+            if val_accuracy > best_accuracy:
+                best_accuracy = val_accuracy
+                best_lr = lr
+                best_wd = wd
+                torch.save(model.state_dict(), "best_model.pth")
+
+print(f"\nBest Validation Accuracy: {best_accuracy:.4f}")
+print(f"Best Learning Rate: {best_lr}, Best Weight Decay: {best_wd}")
