@@ -196,8 +196,8 @@ print(f"Best Validation Accuracy: {best_accuracy:.4f}")
 
 
 # Define ranges for hyperparameter tuning
-learning_rates = [0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009]
-weight_decays = [1e-4, 3e-4, 5e-4, 7e-4]
+learning_rates = [0.007]
+weight_decays = [1e-4]
 
 # Variables to track the best configuration
 best_lr = None
@@ -218,7 +218,7 @@ for lr in learning_rates:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
 
         # Training loop
-        epochs = 30  # Adjust based on time/resource constraints
+        epochs = 50  # Adjust based on time/resource constraints
         for epoch in range(epochs):
             train_loss = train(model, train_loader, optimizer, criterion)
             val_accuracy = evaluate(model, val_loader)
