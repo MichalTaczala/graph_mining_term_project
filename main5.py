@@ -1,20 +1,28 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import  Dataset
-from torch_geometric.loader import DataLoader
-from torch_geometric.data import Data
-from torch_geometric.nn import GCNConv, global_mean_pool
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+from torch.nn.utils.rnn import pad_sequence
 import pandas as pd
-
-# Load dataset
 import numpy as np
+def get_max_metabolite_id(data_file):
+    data = pd.read_csv(data_file)
+    max_id = 0
+    for _, row in data.iterrows():
+        source_metabolites = list(eval(row['source']))
+        destination_metabolites = list(eval(row['destination']))
+        max_id = max(max_id, max(source_metabolites + destination_metabolites))
+    return max_id + 1  # Add 1 for zero-based indexing
 
+
+# Load dataset with metabolite-specific embeddings
 class ReactionDataset(Dataset):
-    def __init__(self, data_file, max_metabolite_id, answers_file=None, is_training=True):
+    def __init__(self, data_file, max_metabolite_id, embedding_dim, answers_file=None, is_training=True):
         self.data = pd.read_csv(data_file)
         self.is_training = is_training
         self.max_metabolite_id = max_metabolite_id
+        self.embedding_dim = embedding_dim
 
         if not is_training and answers_file:
             self.answers = pd.read_csv(answers_file)
@@ -33,79 +41,83 @@ class ReactionDataset(Dataset):
         destination_metabolites = list(eval(row['destination']))
         label = 1 if self.data_y.iloc[idx] else 0
 
-        # One-hot encoding
-        source_vector = np.zeros(self.max_metabolite_id)
-        destination_vector = np.zeros(self.max_metabolite_id)
-        source_vector[source_metabolites] = 1
-        destination_vector[destination_metabolites] = 1
-        feature = np.concatenate([source_vector, destination_vector])
+        # Debugging: Validate sequence lengths
+        if len(source_metabolites) == 0 or len(destination_metabolites) == 0:
+            raise ValueError(f"Empty sequence at index {idx}: Source={source_metabolites}, Destination={destination_metabolites}")
 
-        return torch.tensor(feature, dtype=torch.float), torch.tensor(label, dtype=torch.float)
+        return (
+            torch.tensor(source_metabolites, dtype=torch.long),
+            torch.tensor(destination_metabolites, dtype=torch.long),
+            torch.tensor(label, dtype=torch.float),
+        )
 
 
-class SimpleMLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super(SimpleMLP, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
-        x = self.fc1(x).relu()
-        x = self.fc2(x).relu()
-        x = self.fc3(x).squeeze()
-        return torch.sigmoid(x)
-class ImprovedMLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super(ImprovedMLP, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
+
+
+
+from torch.nn.utils.rnn import pad_sequence
+
+from torch.nn.utils.rnn import pad_sequence
+
+def collate_fn(batch):
+    # Unpack batch into separate lists
+    sources, destinations, labels = zip(*batch)
+
+    # Debugging: Print raw sequence lengths
+    
+
+    # Pad source and destination tensors
+    padded_sources = pad_sequence(sources, batch_first=True, padding_value=0)  # Shape: (batch_size, max_source_len)
+    padded_destinations = pad_sequence(destinations, batch_first=True, padding_value=0)  # Shape: (batch_size, max_dest_len)
+
+    # Stack labels into a tensor (no padding needed for labels)
+    labels = torch.stack(labels)  # Shape: (batch_size,)
+
+    return padded_sources, padded_destinations, labels
+
+
+
+
+# Define the Improved MLP with additional layers and embeddings
+class ImprovedMLPWithEmbeddings(nn.Module):
+    def __init__(self, max_metabolite_id, embedding_dim, hidden_dim, output_dim):
+        super(ImprovedMLPWithEmbeddings, self).__init__()
+        self.embedding = nn.Embedding(max_metabolite_id, embedding_dim)
+        self.fc1 = nn.Linear(2 * embedding_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.bn2 = nn.BatchNorm1d(hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, hidden_dim)
+        self.dropout = nn.Dropout(0.4)
         self.fc4 = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
+    def forward(self, source, destination):
+        # Embed source and destination metabolites
+        source_emb = self.embedding(source)  # Shape: (batch_size, max_source_len, embedding_dim)
+        destination_emb = self.embedding(destination)  # Shape: (batch_size, max_dest_len, embedding_dim)
+
+        # Create masks to ignore padding (padding value = 0)
+        source_mask = (source != 0).unsqueeze(-1)  # Shape: (batch_size, max_source_len, 1)
+        destination_mask = (destination != 0).unsqueeze(-1)  # Shape: (batch_size, max_dest_len, 1)
+
+        # Compute mean embeddings, ignoring padding
+        source_emb = (source_emb * source_mask).sum(dim=1) / source_mask.sum(dim=1).clamp(min=1e-9)
+        destination_emb = (destination_emb * destination_mask).sum(dim=1) / destination_mask.sum(dim=1).clamp(min=1e-9)
+
+        # Concatenate source and destination embeddings
+        x = torch.cat([source_emb, destination_emb], dim=1)
+
+        # Pass through fully connected layers
         x = self.fc1(x).relu()
         x = self.bn1(x)
         x = self.fc2(x).relu()
         x = self.bn2(x)
         x = self.fc3(x).relu()
+        x = self.dropout(x)
         x = self.fc4(x).squeeze()
+
         return torch.sigmoid(x)
-
-import pandas as pd
-
-def get_max_metabolite_id(data_file):
-    data = pd.read_csv(data_file)
-    max_id = 0
-    for _, row in data.iterrows():
-        source_metabolites = list(eval(row['source']))
-        destination_metabolites = list(eval(row['destination']))
-        max_id = max(max_id, max(source_metabolites + destination_metabolites))
-    return max_id + 1  # Add 1 for zero-based indexing
-class GCNModel(nn.Module):
-    def __init__(self, num_nodes, embedding_dim, hidden_dim, output_dim):
-        super(GCNModel, self).__init__()
-        self.embedding = nn.Embedding(num_nodes, embedding_dim)
-        self.conv1 = GCNConv(embedding_dim, hidden_dim)
-        self.conv2 = GCNConv(hidden_dim, hidden_dim)
-        self.conv3 = GCNConv(hidden_dim, hidden_dim)  # Additional GCN layer
-        self.fc1 = nn.Linear(hidden_dim, hidden_dim)  # Additional fully connected layer
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-
-    def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = self.embedding(x)
-        x = self.conv1(x, edge_index).relu()
-        x = self.conv2(x, edge_index).relu()
-        x = self.conv3(x, edge_index).relu()  # Additional GCN layer
-        x = global_mean_pool(x, batch)
-        x = self.fc1(x).relu()
-        x = self.fc2(x).squeeze()
-        return torch.sigmoid(x)
-
-
 
 
 
@@ -113,14 +125,17 @@ class GCNModel(nn.Module):
 def train(model, loader, optimizer, criterion):
     model.train()
     total_loss = 0
-    for features, labels in loader:  # Unpack features and labels from DataLoader
+    for i, (source, destination, labels) in enumerate(loader):
+
         optimizer.zero_grad()
-        out = model(features)  # Pass only the features to the model
-        loss = criterion(out, labels)  # Compute the loss
+        out = model(source, destination)
+        loss = criterion(out, labels)
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
     return total_loss / len(loader)
+
+
 
 # Evaluate function
 def evaluate(model, loader):
@@ -128,57 +143,52 @@ def evaluate(model, loader):
     correct = 0
     total = 0
     with torch.no_grad():
-        for features, labels in loader:  # Unpack features and labels
-            out = model(features)  # Pass only features to the model
-            predicted_labels = (out > 0.5).float()  # Apply threshold
+        for source, destination, labels in loader:
+            out = model(source, destination)
+            predicted_labels = (out > 0.5).float()
             correct += (predicted_labels == labels).sum().item()
             total += labels.size(0)
     return correct / total
 
-# Load datasets
-max_metabolite_id = get_max_metabolite_id("dataset/Classification_training.csv")
-train_dataset = ReactionDataset("dataset/Classification_training.csv", max_metabolite_id)
-val_dataset = ReactionDataset("dataset/Classification_valid_query.csv", max_metabolite_id=max_metabolite_id, answers_file="dataset/Classification_valid_answer.csv", is_training=False)
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=32)
+# Load datasets with embeddings
+embedding_dim = 64  # Dimension of learned metabolite embeddings
+max_metabolite_id = get_max_metabolite_id("dataset/Classification_training.csv")
+train_dataset = ReactionDataset("dataset/Classification_training.csv", max_metabolite_id, embedding_dim)
+val_dataset = ReactionDataset(
+    "dataset/Classification_valid_query.csv", max_metabolite_id, embedding_dim, answers_file="dataset/Classification_valid_answer.csv", is_training=False
+)
+
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
+val_loader = DataLoader(val_dataset, batch_size=32, collate_fn=collate_fn)
+
+
 
 # Model configuration
-input_dim = max(max(len(eval(row['source'])) + len(eval(row['destination'])) for _, row in train_dataset.data.iterrows()),
-                max(len(eval(row['source'])) + len(eval(row['destination'])) for _, row in val_dataset.data.iterrows()))
-# model = GCNModel(num_nodes=num_nodes, embedding_dim=128, hidden_dim=128, output_dim=1)
-# Model parameters
-input_dim = 3  # Feature dimension
-hidden_dim = 64  # Size of hidden layers
-output_dim = 1  # Binary classification output
+hidden_dim = 128  # Increased hidden layer size
+output_dim = 1
 
-# Initialize the model
-# Initialize the model with the correct input_dim
-input_dim = 4  # Number of features in the dataset (updated from 3 to 4)
-hidden_dim = 64  # Size of hidden layers
-output_dim = 1  # Binary classification output
+# Initialize the model with metabolite embeddings
+model = ImprovedMLPWithEmbeddings(max_metabolite_id=max_metabolite_id, embedding_dim=embedding_dim, hidden_dim=hidden_dim, output_dim=output_dim)
 
-# Determine input_dim based on one-hot encoding
-input_dim = 2 * max_metabolite_id  # Source and destination metabolites
-hidden_dim = 64  # Hidden layer size
-output_dim = 1  # Binary classification output
-
-# Initialize the model
-model = ImprovedMLP(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
-
-# Optimizer and loss
+# Optimizer, loss, and scheduler
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
-criterion = nn.BCELoss()  # Binary Cross-Entropy Loss
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
+criterion = nn.BCELoss()
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
 
+# Training loop with scheduler
+epochs = 30
+best_accuracy = 0
 
-
-# Training loop
-epochs = 20
 for epoch in range(epochs):
     train_loss = train(model, train_loader, optimizer, criterion)
     val_accuracy = evaluate(model, val_loader)
+    scheduler.step(val_accuracy)
     print(f"Epoch {epoch+1}: Loss = {train_loss:.4f}, Validation Accuracy = {val_accuracy:.4f}")
 
-# Save model
-torch.save(model.state_dict(), "gcn_model.pth")
+    # Save the best model
+    if val_accuracy > best_accuracy:
+        best_accuracy = val_accuracy
+        torch.save(model.state_dict(), "best_model.pth")
+
+print(f"Best Validation Accuracy: {best_accuracy:.4f}")
