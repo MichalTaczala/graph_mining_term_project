@@ -29,9 +29,6 @@ make install_requirements
 AFTER CODING:
 deactivate
 
-DISCLAIMER:
-if you need to add some libraries, add them to requirements.txt file in order for the rest of the group to install them automatically
-
 
 ## Task 2
 Please run the Task2.py file
