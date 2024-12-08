@@ -6,3 +6,6 @@ torch_geometric
 torch
 networkx
 os
+collections
+ast
+random
