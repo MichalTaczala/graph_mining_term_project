@@ -1190,6 +1190,7 @@ def create_pred_file(final_result : dict, file : str):
 
   with open('Completion_test_answer.csv',"w") as file:
     i =0
+    file.write('reaction id,top 10 candidates\n')
     for _,value in final_result.items():
       reaction_id = first_id + i
       first_line : str = str(reaction_id) + ',{'
@@ -1198,6 +1199,7 @@ def create_pred_file(final_result : dict, file : str):
       for node in value :
         first_line += str(node) + ','
       
+      first_line = first_line[:-1]
       first_line+='}\n'
 
       i+=1
@@ -1307,25 +1309,9 @@ def main():
     print("Current working directory:", os.getcwd())
 
     #Print testing the best GNN model for 150 epochs (5-6min)----------------------------------------------
-    #test_best_GNN()
+    test_best_GNN()
     test_best_model_Jacard()
-    # data =read_the_graph("dataset/Completion_training.csv")
-    # unique_nodes,map_nodes,map_node_reverse = get_unique_nodes(data)
-    # node_features,edge_index,labels,reac_train = get_final_node(data)
-    # DG,sources,all_nodes = graph_create(data)
 
-    # #final_result,acc,hits_at_10,mmr_at_10 = validate_adar(sources,DG,data,validation_query = 'dataset/Completion_valid_query.csv',validation_answer = 'dataset/Completion_valid_answer.csv')
-    # final_result,acc,hits_at_10,mmr_at_10,reactions= validate_custom(DG,data,reac_train,sources,validation_query = 'dataset/Completion_valid_query.csv',validation_answer = '')
-    # #gat,new_edge_index,new_node_features = GAT_model_crea(DG,data,reac_train,unique_nodes,all_nodes)
-
-    # #_,acc,hits_at_10,mmr_at_10 = validate_model2(all_nodes,new_node_features,new_edge_index,gat,validation_query='dataset/Completion_valid_query.csv',validation_answer='dataset/Completion_valid_answer.csv',batch_size=32)
-
-    
-    # create_pred_file(final_result,'dataset/Completion_valid_query.csv')
-    # final_result,acc,hits_at_10,mmr_at_10 = evaluate_final_result(final_result,'dataset/Completion_valid_answer.csv')
-
-    # print(final_result.keys())
-    # print(acc,hits_at_10,mmr_at_10)
 
 
 if __name__ == "__main__":
