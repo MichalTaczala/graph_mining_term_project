@@ -1,6 +1,16 @@
 # graph_mining_term_project
 
 
+# LATE DAYS USED: 2
+
+## Classification task:
+run with:
+python main_classification.py --model_type [GCN/DECISION TREE/MLP]
+
+example:
+python main_classification.py --model_type MLP  
+
+
 activating venv:
 
 Create environment(if you haven't created one before):
