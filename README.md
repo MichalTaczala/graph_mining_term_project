@@ -3,7 +3,10 @@
 
 # LATE DAYS USED: 2
 
-## Classification task:
+# Run the tasks
+
+
+## Task 1-  Classification task:
 run with:
 python main_classification.py --model_type [GCN/DECISION TREE/MLP]
 
@@ -29,9 +32,6 @@ deactivate
 DISCLAIMER:
 if you need to add some libraries, add them to requirements.txt file in order for the rest of the group to install them automatically
 
-# Run the tasks
-
-## Task 1
 
 ## Task 2
 Please run the Task2.py file
