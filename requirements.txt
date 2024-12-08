@@ -4,3 +4,5 @@ scikit-learn
 hypernetx
 torch_geometric
 torch
+networkx
+os
