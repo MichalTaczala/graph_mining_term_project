@@ -1,8 +1,6 @@
 import pandas as pd
 from collections import Counter
 import ast
-import pandas as pd
-import ast
 import random
 import torch
 from torch.utils.data import Dataset, DataLoader
