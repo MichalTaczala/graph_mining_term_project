@@ -36,5 +36,8 @@ if you need to add some libraries, add them to requirements.txt file in order fo
 ## Task 2
 Please run the Task2.py file
 
+Here are the libraries needed for task 2 :torch,torch_geometric,pandas,numpy,networkx,os
+    
+
 ## Task 3
 Run the file prediction_main.py (python prediction_main.py)
