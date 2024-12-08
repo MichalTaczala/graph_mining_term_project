@@ -37,3 +37,4 @@ if you need to add some libraries, add them to requirements.txt file in order fo
 Please run the Task2.py file
 
 ## Task 3
+Run the file prediction_main.py (python prediction_main.py)
