@@ -6,7 +6,7 @@
 # Run the tasks
 
 
-## Task 1-  Classification task:
+## Task 1-  Classification task
 run with:
 python main_classification.py --model_type [GCN/DECISION TREE/MLP]
 
