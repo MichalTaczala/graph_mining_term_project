@@ -38,3 +38,5 @@ Here are the libraries needed for task 2 :torch,torch_geometric,pandas,numpy,net
 
 ## Task 3
 Run the file prediction_main.py (python prediction_main.py)
+
+Here are the libraries needed for task 2 :pandas,collections,ast,random,torch,networkx
